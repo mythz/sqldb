@@ -1,3 +1,7 @@
+# Custom
+*.db
+*.lockb
+
 # Logs
 logs
 *.log

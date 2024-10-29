@@ -1,17 +1,14 @@
-import { dbSqlite } from "./dbSqlite"
-import { dbPostgres } from "./dbPostgres"
-import { sql } from "drizzle-orm"
+import dbSqlite from "./dbSqlite"
+import pgSql from "./dbPostgres"
 
 export function helloSqlite() {
-    const query = sql`select "hello world" as text`
-    const result = dbSqlite.get<{ text: string }>(query)
+    const result = dbSqlite.sync.scalar`select "hello world" as text`
     return result
 }
 
 export async function helloPostgres() {
-    const query = sql`select "hello world" as text`
-    const result = await dbPostgres.execute<{ text: string }>(query)
-    return result
+    const result = await pgSql.unsafe(`select 'hello world' as text`)
+    return result[0].text
 }
 
 export const one = 1
@@ -20,3 +17,4 @@ export const two = 2
 export function add(a: number, b: number) {
   return a + b
 }
+

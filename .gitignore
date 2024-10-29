@@ -1,5 +1,7 @@
 # Custom
 *.db
+*.db-shm
+*.db-wal
 *.lockb
 
 # Logs

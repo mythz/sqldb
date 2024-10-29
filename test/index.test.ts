@@ -17,13 +17,17 @@ describe('should', () => {
   it('hello sqlite', () => {
     const result = helloSqlite()
     console.log(result)
-    expect(result).toEqual(["hello world"])
+    expect(result).toEqual("hello world")
   })
 
   it('hello postgres', async () => {
     const result = await helloPostgres()
     console.log(result)
-    expect(result).toEqual(["hello world"])
+    expect(result).toEqual("hello world")
+  })
+
+  it('can firstSync', () => {
+    
   })
 
 })

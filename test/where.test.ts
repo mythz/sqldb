@@ -15,6 +15,9 @@ describe('SQLite WHERE Tests', () => {
             expect(params.id).toBe(id)
         }
 
+        expect(str(db.from(Contact).where(c => $`${c.id} = ${id}`)))
+            .toContain(`FROM "Contact" WHERE "id" = $1`)
+            
         assert(db.from(Contact).where({ eq:  { id } }))
         assert(db.from(Contact).where({ '=': { id } }))
         assert(db.from(Contact).where({ op:  ['=',{ id }] }))
@@ -31,6 +34,9 @@ describe('SQLite WHERE Tests', () => {
             expect(params.key).toBe(key)
         }
 
+        expect(str(db.from(Person).where(c => $`${c.key} = ${key}`)))
+            .toContain(`FROM "Contact" WHERE "id" = $1`)
+
         assert(db.from(Person).where({ eq:  { key } }))
         assert(db.from(Person).where({ '=': { key } }))
         assert(db.from(Person).where({ op:  ['=',{ key }] }))
@@ -38,7 +44,7 @@ describe('SQLite WHERE Tests', () => {
         assert(db.from(Person).where({ sql: sql('"id" = $key', { key }) }))
         assert(db.from(Person).where({ sql: { sql:'"id" = $key', params:{ key } } }))
 
-        expect(str(db.from(Person).where((p:Person) => sql`${p.key} = ${key}`)))
+        expect(str(db.from(Person).where((p:Person) => $`${p.key} = ${key}`)))
             .toBe(`SELECT ${selectPerson} FROM "Contact" WHERE "id" = $1`)
         // const p = sql.ref(Person,'p')
         // db.from(Person).where`${p.key} = ${key}`
@@ -51,6 +57,9 @@ describe('SQLite WHERE Tests', () => {
             expect(sql).toBe(`SELECT ${selectPerson} FROM "Contact" WHERE "id" = $key`)
             expect(params.key).toBe(key)
         }
+
+        expect(str(db.from(DynamicPerson).where(c => $`${c.key} = ${key}`)))
+            .toContain(`FROM "Contact" WHERE "id" = $1`)
 
         assert(db.from(DynamicPerson).where({ eq:  { key } }))
         assert(db.from(DynamicPerson).where({ '=': { key } }))
@@ -69,6 +78,9 @@ describe('SQLite WHERE Tests', () => {
             expect(sql).toBe(`SELECT ${selectContact} FROM "Contact" WHERE "id" = $id AND "city" = $city`)
             expect(params.id).toBe(id)
         }
+
+        expect(str(db.from(Contact).where(c => $`${c.id} = ${id} AND ${c.city} = ${city}`)))
+            .toContain(`FROM "Contact" WHERE "id" = $1 AND "city" = $2`)
 
         assert(db.from(Contact).where({ eq:  { id, city } }))
         assert(db.from(Contact).where({ '=': { id, city } }))
@@ -90,6 +102,9 @@ describe('SQLite WHERE Tests', () => {
             expect(params.key).toBe(key)
         }
 
+        expect(str(db.from(Person).where(c => $`${c.key} = ${key} AND ${c.name} = ${name}`)))
+            .toContain(`FROM "Contact" WHERE "id" = $1 AND "firstName" = $2`)
+
         assert(db.from(Person).where({ eq:  { key, name } }))
         assert(db.from(Person).where({ '=': { key, name } }))
         assert(db.from(Person).where({ op:  ['=',{ key, name }] }))
@@ -107,9 +122,9 @@ describe('SQLite WHERE Tests', () => {
             expect(params['1']).toBe(id)
         }
 
-        const { sql } = db
+        assert(db.from(Contact).where(c => $`${c.id} = ${id}`))
         assert(db.from(Contact).where`"id" = ${id}`)
-        assert(db.from(Contact).where({ sql: sql`"id" = ${id}` }))
+        assert(db.from(Contact).where({ sql: $`"id" = ${id}` }))
     })
 
 })

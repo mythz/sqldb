@@ -44,9 +44,10 @@ describe('SelectQuery API Tests', () => {
             expect(params).toEqual({ '1':id, '2':city })
         }
 
+        assert(db.from(Contact).where(c => $`a = ${id} AND city = ${city}`))
         assert(db.from(Contact).where`a = ${id}`.and`city = ${city}`)
-        assert(db.from(Contact).where( { sql:[sql`a = ${id}`, sql`city = ${city}`] }))
-        assert(db.from(Contact).where( { sql:sql`a = ${id}` }).and({ sql:sql`city = ${city}` }))
+        assert(db.from(Contact).where( { sql:[$`a = ${id}`, $`city = ${city}`] }))
+        assert(db.from(Contact).where( { sql:$`a = ${id}` }).and({ sql:$`city = ${city}` }))
         assert(db.from(Contact).where( { rawSql:`a = $1 AND city = $2`, params: { [1]:id, [2]:city }  }))
     })
 

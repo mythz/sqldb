@@ -1,5 +1,5 @@
 import { createSql, SelectQuery, sql, UpdateQuery } from "./query"
-import type { Driver, DbBinding, ReflectMeta, ClassParam, ClassInstance, TableDefinition, Fragment, SqlBuilder, Statement } from "./types"
+import type { Driver, DbBinding, ReflectMeta, ClassParam, ClassInstance, TableDefinition, Fragment, SqlBuilder, Statement, Constructor } from "./types"
 import { keysWithValues as propsWithValues } from "./utils"
 
 export class Meta {
@@ -52,7 +52,6 @@ type DeleteOptions = {
 }
 
 export class Schema {
-
     static metadata: { [id:symbol]: Meta } = {}
 
     static assertClass(table:ClassParam) : ReflectMeta {
@@ -88,6 +87,18 @@ export class Schema {
         const cls = Schema.assertClass(table)
         const id = cls.$id as symbol
         return Schema.metadata[id] ?? (Schema.metadata[id] = new Meta(Schema.assertTable(cls)))
+    }
+
+    static assertSql(sql: Fragment|any) {
+        if (typeof sql != 'object' || !sql.sql) {
+            const desc = typeof sql == 'symbol' 
+                ? sql.description
+                : Array.isArray(sql)
+                    ? 'Array'
+                    : `${sql}`
+            throw new Error(`Expected ${'sql`...`'} fragment, received: ${desc}`)
+        }
+        return sql
     }
 
     static dropTable(table:ClassParam, driver:Driver) {
@@ -212,14 +223,14 @@ export class ConnectionBase {
         this.sql = (driver as any).sql ?? createSql(driver)
     }
     quote(symbol:string) { return this.driver.quote(symbol) }
-    from<Table extends ClassParam>(table:Table) { 
-        return new SelectQuery(Schema.assertMeta(table), this.driver) 
+    from<Table>(table:Constructor<Table>) { 
+        return new SelectQuery<Table>(Schema.assertMeta(table), this.driver) 
     }
-    updateFor<Table extends ClassParam>(table:Table) { 
-        return new UpdateQuery(Schema.assertMeta(table), this.driver) 
+    updateFor<Table>(table:Constructor<Table>) { 
+        return new UpdateQuery<Table>(Schema.assertMeta(table), this.driver) 
     }
-    deleteFrom<Table extends ClassParam>(table:Table) { 
-        return new UpdateQuery(Schema.assertMeta(table), this.driver) 
+    deleteFrom<Table>(table:Constructor<Table>) { 
+        return new UpdateQuery<Table>(Schema.assertMeta(table), this.driver) 
     }
 }
 

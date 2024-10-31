@@ -1,5 +1,6 @@
-import type { ClassParam, Driver, Fragment, ReflectMeta, SqlBuilder } from "./types"
+import type { ClassParam, Constructor, ConstructorToTypeRef, Driver, Fragment, JoinType, ReflectMeta, SqlBuilder, TypeRef, WhereOptions } from "./types"
 import { Meta, Schema } from "./connection"
+import { CreateJoin } from "./queryTyped"
 
 export class Sql
 {
@@ -27,30 +28,6 @@ export class Sql
     static opKeys = Object.keys(Sql.ops)
 }
 
-type WhereOptions = { 
-    eq?:      Record<string,any>
-    '='?:     Record<string,any>
-    notEq?:   Record<string,any> 
-    '!='?:    Record<string,any>
-    gt?:      Record<string,any> 
-    '>'?:     Record<string,any>
-    gte?:     Record<string,any> 
-    '>='?:    Record<string,any>
-    lt?:      Record<string,any> 
-    '<'?:     Record<string,any>
-    lte?:     Record<string,any>
-    '<='?:    Record<string,any>
-    in?:      Record<string,any>
-    notIn?:   Record<string,any>
-    like?:    Record<string,any>
-    notLike?: Record<string,any>
-    isNull?:  Record<string,any>
-    notNull?: Record<string,any>
-    op?:      [string, Record<string,any>]
-    sql?:     Fragment|Fragment[] 
-    rawSql?:  string|string[]
-}
-
 export function createSql(driver:Driver) {
     function sql(strings: TemplateStringsArray|string, ...params: any[]) : Fragment {
         if (Array.isArray(strings)) {
@@ -58,10 +35,19 @@ export function createSql(driver:Driver) {
             const sqlParams:Record<string,any> = {}
             for (let i = 0; i < strings.length; i++) {
                 sb += strings[i]
-                if (i < params.length) {
-                    const name = `${i+1}`
+                if (i >= params.length) continue
+                const value = params[i]
+                if (typeof value == 'symbol') {
+                    // include symbol literal as-is
+                    sb += value.description ?? ''
+                } else if (typeof value == 'object' && value.$ref) {
+                    // if referencing proxy itself, return its quoted tableName
+                    sb += driver.quoteTable(Schema.assertMeta(value.$ref.cls).tableName)
+                } else if (value) {
+                    const paramIndex = Object.keys(sqlParams).length + 1
+                    const name = `${paramIndex}`
                     sb += `$${name}`
-                    sqlParams[name] = params[i]
+                    sqlParams[name] = value
                 }
             }
             return ({ sql:sb, params:sqlParams })
@@ -69,17 +55,39 @@ export function createSql(driver:Driver) {
             return ({ sql:strings, params:params[0] })
         } else throw new Error(`sql(${typeof strings}) is invalid`)
     }
-    sql.column = function<T extends ClassParam>(cls:T, prop:string) {
-        const meta = Schema.assertMeta(cls)
-        const column = meta.props.find(x => x.name == prop)?.column
-        if (!column) throw new Error(`Could not find column ${prop} on ${meta.name}`)
-        return { sql:driver.quoteColumn(column.name) }
+    // sql.column = function<T extends ClassParam>(cls:T, prop:string) {
+    //     const meta = Schema.assertMeta(cls)
+    //     const column = meta.props.find(x => x.name == prop)?.column
+    //     if (!column) throw new Error(`Could not find column ${prop} on ${meta.name}`)
+    //     return { sql:driver.quoteColumn(column.name) }
+    // }
+
+    function quote(meta:Meta, prop:string) {
+        const p = meta.props.find(x => x.name == prop)?.column
+        if (!p) throw new Error(`${meta.name} does not have a column property ${prop}`)
+        return driver.quoteColumn(p.name)
     }
+    sql.ref = function<T>(cls:Constructor<T>, as?:string) : TypeRef<T> {
+        const meta = Schema.assertMeta(cls)
+        if (as == null)
+            as = driver.quoteTable(meta.tableName)
+        const get = (target: { prefix:string, meta:Meta }, key:string|symbol) => key == '$ref' 
+            ? { cls, as }
+            : Symbol(target.prefix + quote(meta, typeof key == 'string' ? key : key.description!))
+        const p = new Proxy({ prefix: as ? as + '.' : '', meta }, { get })
+        return p as any as TypeRef<T>
+    }
+    sql.refs = function refs<T extends readonly Constructor[]>(...classes: [...T]): ConstructorToTypeRef<T> {
+        return classes.map(cls => sql.ref(cls)) as ConstructorToTypeRef<T>
+    }
+    sql.join = function<JoinTables extends Constructor<any>[]>(...joinTables:any[]) {
+        return new CreateJoin<JoinTables>(joinTables)
+    }
+
     return sql
 }
 
-type JoinType = "JOIN" | "INNER JOIN" | "LEFT JOIN" | "RIGHT JOIN" | "OUTER JOIN" | "CROSS JOIN"
-type Join = {
+export type Join = {
     join:  JoinType 
     table: string
     cls:   ClassParam
@@ -87,18 +95,49 @@ type Join = {
     as?:   string
     on?:   string
     sql?:  Fragment
+    p?:    TypeRef<Constructor<any>>
 }
 
-export class WhereQuery implements SqlBuilder {
+export class WhereQuery<Table> implements SqlBuilder {
     protected _where:string[][] = []
     params: Record<string,any> = {}
     sql:ReturnType<typeof createSql>
     _alias?:string
     _aliases: Record<string,any> = {}
     _joins:Join[] = []
+    _p:TypeRef<Table>
 
     constructor(public meta:Meta, public driver:Driver) {
         this.sql = (driver as any).sql ?? createSql(driver)
+        this._p = this.sql.ref(meta.cls, '')
+    }
+
+    ref():TypeRef<Table> { return this._p }
+
+    refs() : TypeRef<any> { 
+        return [this._p].concat(this._joins.map(x => x.p).filter(x => !!x) as any[])
+    }
+
+    refOf<T>(cls:Constructor<T>) : TypeRef<T>|null {
+        if (this.meta.cls === cls as any) {
+            return this._p as any
+        } else {
+            for (const joinCls of this._joins) {
+                if (joinCls.cls === cls) {
+                    return joinCls.p as any
+                }
+            }
+        }
+        return null
+    }
+
+    refsOf<T extends readonly Constructor[]>(...classes: [...T]): ConstructorToTypeRef<T> {
+        return classes.map(cls => {
+            const ret = this.refOf(cls)
+            if (ret == null)
+                throw new Error(`Could not find ref for '${cls.name}'`)
+            return ret
+        }) as ConstructorToTypeRef<T>
     }
 
     prevJoin() {
@@ -106,63 +145,83 @@ export class WhereQuery implements SqlBuilder {
             ? this._joins[this._joins.length - 1]
             : null
         return join
-            ? { meta:join, as:join.as ?? this.quoteTable(join.meta.tableName) }
-            : { meta:this.meta, as:this._alias ?? this.quoteTable(this.meta.tableName) }
+            ? join.p
+            : this._p
     }
 
-    addJoin<T extends ClassParam>(join:{ join:JoinType, cls:T, on?:string|((...params:any[]) => string), as?:string }) {
-        const meta = Schema.assertMeta(join.cls)
-        let on = join.on
-        if (typeof join.on == 'function') {
-            const quote = (meta:Meta, prop:string) => {
-                const p = meta.props.find(x => x.name == prop)?.column
-                if (!p) throw new Error(`${meta.name} does not have a column property ${prop}`)
-                return this.driver.quoteColumn(p.name)
-            }
-            const get = (target: { prefix:string, meta:Meta }, key:string|symbol) => target.prefix + quote(meta, typeof key == 'string' ? key : key.description!)
-            const lJoin = this.prevJoin()
-            const l = new Proxy({ prefix:lJoin.as + '.', meta:lJoin.meta }, { get })
-            const r = new Proxy({ prefix:(join.as ?? this.driver.quoteTable(meta.tableName)) + '.', meta }, { get })
-            on = join.on(l, r)
+    protected unwrap<T>(cls:Constructor<T>|TypeRef<T>) {
+        return typeof cls == 'object' && cls.$ref
+            ? cls.$ref.cls
+            : cls
+    }
+
+    addJoin<T>(join:{ join:JoinType, cls:Constructor<T>|Constructor<any>[]|TypeRef<any>, on?:string|((...params:any[]) => Fragment), as?:string }) {
+        // Fully qualify Table p ref
+        if (!this._alias) {
+            this._alias = this.quoteTable(this.meta.tableName)
+            this._p = this.sql.ref(this.meta.cls, this._alias)
         }
-        this._joins.push({ join:join.join, cls:join.cls, table:meta.tableName, meta, as:join.as, on })
+
+        const joinCls = Array.isArray(join.cls)
+            ? this.unwrap(join.cls[0])
+            : this.unwrap(join.cls)
+
+        const meta = Schema.assertMeta(joinCls)
+        let on = typeof join.on == 'string' ? join.on : undefined
+        const p = this.sql.ref(joinCls, join.as)
+        if (typeof join.on == 'function') {
+            const refs = Array.isArray(join.cls)
+                ? join.cls.map(this.unwrap).map(x => this.sql.ref(x)).concat([this._p])
+                : [this.prevJoin(), this.sql.ref(joinCls)]
+            const sql = Schema.assertSql(join.on.call(this, ...refs))
+            on = this.mergeParams(sql)
+        }
+        this._joins.push({ join:join.join, cls:join.cls, table:meta.tableName, meta, as:join.as, on, p })
         return this
     }
-    join<T extends ClassParam>(cls:T, options:{ on?:string|((...params:any[]) => string), as?:string }) {
+    join<T>(cls:Constructor<T>|Constructor<any>[]|TypeRef<any>, options?:{ on?:string|((...params:any[]) => Fragment), as?:string }) {
         return this.addJoin({ join:"JOIN", cls, on:options?.on, as:options?.as })
     }
-    leftJoin<T extends ClassParam>(cls:T, options:{ on?:string|((...params:any[]) => string), as?:string }) {
+    leftJoin<T>(cls:Constructor<T>|Constructor<any>[], options?:{ on?:string|((...params:any[]) => Fragment), as?:string }) {
         return this.addJoin({ join:"LEFT JOIN", cls, on:options?.on, as:options?.as })
     }
-    rightJoin<T extends ClassParam>(cls:T, options:{ on?:string|((...params:any[]) => string), as?:string }) {
+    rightJoin<T>(cls:Constructor<T>|Constructor<any>[], options?:{ on?:string|((...params:any[]) => Fragment), as?:string }) {
         return this.addJoin({ join:"RIGHT JOIN", cls, on:options?.on, as:options?.as })
     }
-    crossJoin<T extends ClassParam>(cls:T, options:{ on?:string|((...params:any[]) => string), as?:string }) {
+    crossJoin<T>(cls:Constructor<T>|Constructor<any>[], options?:{ on?:string|((...params:any[]) => Fragment), as?:string }) {
         return this.addJoin({ join:"CROSS JOIN", cls, on:options?.on, as:options?.as })
     }
 
-    where(options:WhereOptions|TemplateStringsArray, ...params:any[]) { 
+    on(strings:TemplateStringsArray, ...params:any[]) {
+        return this
+    }
+
+    where(options:WhereOptions|TemplateStringsArray|Function, ...params:any[]) { 
         return this.and(options, ...params)
     }
 
-    and(options:WhereOptions|TemplateStringsArray, ...params:any[]) {
+    and(options:WhereOptions|TemplateStringsArray|Function, ...params:any[]) {
         if (!options && params.length == 0) {
             this._where.length = 0
             return this
         } else if (Array.isArray(options)) {
             return this.condition('AND', { sql: this.sql(options as TemplateStringsArray, ...params) }) 
+        } else if (typeof options == 'function') {
+            const sql = Schema.assertSql(options.call(this, ...this.refs()))
+            return this.condition('AND', { sql })
         } else {
             return this.condition('AND', options as WhereOptions) 
         }
     }
 
-    or(options:WhereOptions|TemplateStringsArray, ...params:any[]) { 
+    or(options:WhereOptions|TemplateStringsArray|Function, ...params:any[]) { 
         if (!options && params.length == 0) {
             this._where.length = 0
         } else if (Array.isArray(options)) {
-            return this.condition('AND', { sql: this.sql(options as TemplateStringsArray, ...params) }) 
+            return this.condition('OR', { sql: this.sql(options as TemplateStringsArray, ...params) }) 
+        } else if (typeof options == 'function') {
         } else {
-            return this.condition('AND', options as WhereOptions) 
+            return this.condition('OR', options as WhereOptions) 
         }
     }
 
@@ -170,8 +229,7 @@ export class WhereQuery implements SqlBuilder {
         if (options.sql) {
             const sql = Array.isArray(options.sql) ? options.sql : [options.sql]
             for (const fragment of sql) {
-                this._where.push([condition, fragment.sql])
-                this.addParams(fragment.params)
+                this._where.push([condition, this.mergeParams(fragment)])
             }
         }
         if (options.rawSql) {
@@ -179,6 +237,7 @@ export class WhereQuery implements SqlBuilder {
             for (const fragment of sql) {
                 this._where.push([condition, fragment])
             }
+            this.addParams(options.params)
         }
         for (const [op, values] of Object.entries(options)) {
             if (Sql.opKeys.includes(op)) {
@@ -205,6 +264,7 @@ export class WhereQuery implements SqlBuilder {
             this._aliases = {} 
         } else if (typeof cls == 'string') {
             this._alias = cls
+            this._p = this.sql.ref(this.meta.cls, this._alias)
         } else if (cls != null && alias != null) {
             const meta = Schema.assertMeta(cls)
             this._aliases[meta.name] = alias
@@ -219,6 +279,26 @@ export class WhereQuery implements SqlBuilder {
                 this.params[key] = value
             }
         }
+    }
+
+    protected mergeParams(f:Fragment) {
+        let sql = f.sql
+        if (f.params && typeof f.params == 'object') {
+            for (const [key, value] of Object.entries(f.params)) {
+                const exists = key in this.params && !isNaN(parseInt(key))
+                if (exists) {
+                    const positionalParams = Object.keys(this.params).map(x => parseInt(x)).filter(x => !isNaN(x))
+                    const nextParam = positionalParams.length == 0
+                        ? 1
+                        : Math.max(...positionalParams) + 1
+                    sql = sql.replaceAll(`$${key}`,`$${nextParam}`)
+                    this.params[nextParam] = value
+                } else {
+                    this.params[key] = value
+                }
+            }
+        }
+        return sql
     }
 
     private addWhere(condition:string, sqlOp:string, values:any) {
@@ -251,8 +331,8 @@ export class WhereQuery implements SqlBuilder {
         let sql = ''
         for (const join of this._joins) {
             const on = typeof join.on == 'string'
-            ? ` ON ${join.on}`
-            : ''
+                ? ` ON ${join.on}`
+                : ''
             sql += ` ${join.join} ${this.driver.quoteTable(join.table)}${on}`
         }
         return sql
@@ -270,7 +350,7 @@ type SelectOptions = {
     sql?:Fragment|Fragment[],
 }
 
-export class SelectQuery extends WhereQuery {
+export class SelectQuery<Table> extends WhereQuery<Table> {
     protected _select:string[] = []
     protected _skip:number | undefined
     protected _take:number | undefined
@@ -289,9 +369,7 @@ export class SelectQuery extends WhereQuery {
                 this.addParams(params[0])
             }
         } else if (Array.isArray(options)) {
-            const select = this.sql(options as TemplateStringsArray, ...params)
-            this._select.push(select.sql)
-            this.addParams(select.params)
+            this._select.push(this.mergeParams(this.sql(options as TemplateStringsArray, ...params)))
         } else if (typeof options === 'object') {
             const o = options as SelectOptions
             if (o.sql) {
@@ -315,19 +393,8 @@ export class SelectQuery extends WhereQuery {
                 }
             }
         } else if (typeof options == 'function') {
-            const p = this.p
-            const columns = options.call(this,p,p,p,p,p,p,p,p)
-            for (const item of columns) {
-                if (typeof item == 'string') {
-                    const column = this.meta.props.find(x => x.name == item)?.column
-                    if (!column) throw new Error(`Could not find column '${item}' on '${this.meta.name}'`)
-                    this._select.push(this.quoteColumn(column.name))
-                } else if (typeof item == 'object' && item.sql) {
-                    this._select.push(item.sql)
-                    this.addParams(item.params)
-                } else if (item == null) { } //ignore
-                else throw new Error(`Invalid select => [${typeof item}]`)
-            }
+            const sql = Schema.assertSql(options.call(this, ...this.refs()))
+            this._select.push(this.mergeParams(sql))
         } else throw new Error(`Invalid select(${typeof options})`)
         return this
     }
@@ -357,8 +424,9 @@ export class SelectQuery extends WhereQuery {
     }
 
     buildFrom() {
-        let sql = `FROM ${this.quoteTable(this.meta.tableName)}`
-        if (this._alias) {
+        const quotedTable = this.quoteTable(this.meta.tableName)
+        let sql = `FROM ${quotedTable}`
+        if (this._alias && this._alias != quotedTable) {
             sql += ` ${this._alias}`
         }
         return sql
@@ -383,7 +451,7 @@ export class SelectQuery extends WhereQuery {
     }
 }
 
-export class UpdateQuery extends WhereQuery {
+export class UpdateQuery<Table> extends WhereQuery<Table> {
     private _set:string[] = []
 
     constructor(public meta:Meta, public driver:Driver) {
@@ -432,7 +500,7 @@ export class UpdateQuery extends WhereQuery {
     }
 }
 
-export class DeleteQuery extends WhereQuery {
+export class DeleteQuery<Table> extends WhereQuery<Table> {
     constructor(public meta:Meta, public driver:Driver) {
         super(meta,driver)
     }

@@ -43,11 +43,11 @@ export class Order {
     @column("INTEGER", { autoIncrement:true })
     id: number = 0
 
-    @column("INTEGER")
+    @column("INTEGER", { required:true })
     contactId: number = 0
 
-    @column("TEXT")
-    lineItem: string = ''
+    @column("INTEGER")
+    freightId?: number
 
     @column("INTEGER")
     cost: number = 0
@@ -57,6 +57,27 @@ export class Order {
 
     @column("INTEGER")
     total: number = 0
+}
+
+@table()
+export class OrderItem {
+    @column("INTEGER", { autoIncrement:true })
+    id: number = 0
+
+    @column("INTEGER", { required:true })
+    orderId: number = 0
+
+    @column(DataType.TEXT, { required:true })
+    name: string = ''
+}
+
+@table()
+export class Freight {
+    @column("INTEGER", { autoIncrement:true })
+    id: number = 0
+
+    @column(DataType.TEXT, { required:true })
+    name: string = ''
 }
 
 export const contacts = [

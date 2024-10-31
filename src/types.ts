@@ -27,8 +27,13 @@ export type ColumnType = 'INTEGER' | 'SMALLINT' | 'BIGINT'
     | 'UUID' | 'BLOB' | 'BYTES' | 'BIT'
     | 'TEXT' | 'VARCHAR' | 'NVARCHAR' | 'CHAR' | 'NCHAR' | 'JSON' | 'JSONB' | 'XML'
 
-export type Constructor<T> = new (...args: any[]) => T
+export type Constructor<T = any> = new (...args: any[]) => T
 export type ConstructorWithParams<T, P extends any[]> = new (...args: P) => T
+
+// Helper type to convert tuple of constructors to tuple of instances
+export type ConstructorToInstances<T> = {
+    [K in keyof T]: T[K] extends Constructor<infer U> ? U : never;
+};
 
 export type ClassParam = ReflectMeta | { constructor:ReflectMeta } | Constructor<any>
 export type ClassInstance = { constructor:ReflectMeta } & Record<string, any> | Record<string, any>
@@ -106,7 +111,7 @@ export interface Driver
     
     quoteTable(name: string): string
 
-    quoteColumn(name: string, table?:string): string
+    quoteColumn(name: string): string
 
     sqlColumnDefinition(column: ColumnDefinition): string;
 
@@ -128,3 +133,40 @@ export type Fragment = { sql:string, params?:Record<string,any> }
 export interface SqlBuilder {
     build(): { sql:string, params:Record<string,any> }
 }
+
+
+
+export type WhereOptions = { 
+    eq?:      Record<string,any>
+    '='?:     Record<string,any>
+    notEq?:   Record<string,any> 
+    '!='?:    Record<string,any>
+    gt?:      Record<string,any> 
+    '>'?:     Record<string,any>
+    gte?:     Record<string,any> 
+    '>='?:    Record<string,any>
+    lt?:      Record<string,any> 
+    '<'?:     Record<string,any>
+    lte?:     Record<string,any>
+    '<='?:    Record<string,any>
+    in?:      Record<string,any>
+    notIn?:   Record<string,any>
+    like?:    Record<string,any>
+    notLike?: Record<string,any>
+    isNull?:  Record<string,any>
+    notNull?: Record<string,any>
+    op?:      [string, Record<string,any>]
+    sql?:     Fragment|Fragment[] 
+    rawSql?:  string|string[]
+    params?:  Record<string,any>
+}
+
+export type TypeRef<T> = T & { $ref: { cls:Constructor<T>, as?:string } }
+
+export type ConstructorToTypeRef<T extends readonly any[]> = {
+    [K in keyof T]: T[K] extends new (...args: any[]) => infer R 
+        ? TypeRef<R>
+        : never;
+}
+
+export type JoinType = "JOIN" | "INNER JOIN" | "LEFT JOIN" | "RIGHT JOIN" | "OUTER JOIN" | "CROSS JOIN"

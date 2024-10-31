@@ -1,5 +1,5 @@
 import { Schema } from "../connection"
-import type { Constructor, Fragment } from "../types"
+import type { Constructor, Fragment, TypeRefs } from "../types"
 import { WhereQuery } from "./where"
 
 type SelectOptions = {
@@ -15,7 +15,7 @@ export class SelectQuery<Tables extends Constructor<any>[]> extends WhereQuery<T
     protected _take:number | undefined
     //p = new Proxy({}, { get: (target,key) => key })
 
-    select<T>(options:SelectOptions|TemplateStringsArray|string|Function, ...params:any[]) {
+    select<T>(options:SelectOptions|TemplateStringsArray|string|((...params:TypeRefs<Tables>) => Fragment), ...params:any[]) {
         if (!options && params.length === 0) {
             this._select.length = 0
         } else if (typeof options === 'string') {  

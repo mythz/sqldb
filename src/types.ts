@@ -201,7 +201,8 @@ export type JoinDefinition = {
     params?:Record<string,any> 
 }
 
-export interface JoinBuilder {
+export interface JoinBuilder<Table extends Constructor<any>> {
+    get table(): Table
     get tables(): Constructor<any>[]
     build(refs:ConstructorsToRefs<any>, type:JoinType) : JoinDefinition
 }

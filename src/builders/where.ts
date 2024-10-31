@@ -5,11 +5,19 @@ import { SelectQuery } from "./select"
 import { DeleteQuery } from "./delete"
 import { UpdateQuery } from "./update"
 
-function joinOptions<NewTable>(type:JoinType, 
-    cls:Constructor<NewTable>,
+type OnJoin<
+    First extends Constructor<any>, 
+    Second extends Constructor<any>,
+    Table extends Constructor<any>> = (
+        from: TypeRef<InstanceType<First>>, 
+        to: TypeRef<InstanceType<Second>>, 
+        table:TypeRef<InstanceType<Table>>) => Fragment
+
+function joinOptions<NewTable extends Constructor<any>>(type:JoinType, 
+    cls:NewTable,
     options?:JoinParams|SqlBuilder) : { 
         type:JoinType, 
-        cls:Constructor<NewTable>
+        cls:NewTable
         on?:string | ((...params:any[]) => Fragment),
         as?:string
         params?:Record<string,any>
@@ -44,7 +52,8 @@ function mergeParams(params:Record<string,any>, f:Fragment) {
     return sql
 }
 
-export class SqlJoinBuilder<Tables extends Constructor<any>[]> implements JoinBuilder {
+export class SqlJoinBuilder<Tables extends Constructor<any>[]> implements JoinBuilder<First<Tables>> {
+    get table() { return this.tables[0] as First<Tables> }
     tables: Tables
     refs: ConstructorsToRefs<Tables>
 
@@ -107,7 +116,7 @@ export class WhereQuery<Tables extends Constructor<any>[]> {
     protected _joins:JoinDefinition[] = []
     public params:Record<string,any> = {}
 
-    get ref() { return this.refs[0] }
+    get ref() : TypeRef<InstanceType<First<Tables>>> { return this.refs[0] }
     get meta() { return this.metas[0] }
     get hasWhere() { return this._where.length > 0 }
 
@@ -120,16 +129,18 @@ export class WhereQuery<Tables extends Constructor<any>[]> {
         return null
     }
 
-    refsOf<T extends readonly Constructor[]>(...classes: [...T]): ConstructorToTypeRef<T> {
+    refsOf<T extends readonly Constructor<any>[]>(...classes: [...T]): { 
+        [K in keyof T]: TypeRef<InstanceType<T[K]>> 
+    } {
         return classes.map(cls => {
             const ret = this.refOf(cls)
             if (ret == null)
                 throw new Error(`Could not find ref for '${cls.name}'`)
             return ret
-        }) as ConstructorToTypeRef<T>
+        }) as { [K in keyof T]: TypeRef<InstanceType<T[K]>> }
     }
 
-    prevJoin() {
+    prevJoin() : TypeRef<InstanceType<Constructor<any>>> {
         return this.refs[this.refs.length - 1]
     }
 
@@ -154,14 +165,14 @@ export class WhereQuery<Tables extends Constructor<any>[]> {
         return instance
     }
 
-    addJoin<NewTable>(join:{ 
+    addJoin<NewTable extends Constructor<any>>(join:{ 
         type:JoinType, 
-        cls:Constructor<NewTable>
+        cls:NewTable
         on?:string | ((...params:any[]) => Fragment),
         as?:string
         params?:Record<string,any>
     }) {
-        const table = join.cls as Constructor<NewTable>
+        const table = join.cls as NewTable
         const instance = this.createInstance(table)
         this.copyInto(instance as any)
 
@@ -187,8 +198,8 @@ export class WhereQuery<Tables extends Constructor<any>[]> {
         return instance
     }
 
-    joinBuilder<NewTable>(builder:JoinBuilder, typeHint:JoinType="JOIN") {
-        const cls = builder.tables[0] as Constructor<NewTable>
+    joinBuilder<NewTable extends Constructor<any>>(builder:JoinBuilder<NewTable>, typeHint:JoinType="JOIN") {
+        const cls = builder.tables[0] as NewTable
         const q = this.createInstance(cls)
         this.copyInto(q)
 
@@ -203,57 +214,57 @@ export class WhereQuery<Tables extends Constructor<any>[]> {
         return q
     }
 
-    join<NewTable>(cls:Constructor<NewTable>|JoinBuilder, 
+    join<NewTable extends Constructor<any>>(cls:NewTable|JoinBuilder<NewTable>, 
         options?:{ 
-        on?:(from: InstanceType<Last<Tables>>, to: NewTable, table:InstanceType<First<Tables>>) => Fragment, 
+        on?:OnJoin<Last<Tables>, NewTable, First<Tables>>
         as?:string 
     }|SqlBuilder) {
         return (cls as any).tables
-            ? this.joinBuilder<NewTable>(cls as JoinBuilder, "JOIN")
-            : this.addJoin<NewTable>(joinOptions<NewTable>("JOIN", cls as Constructor<NewTable>, options))
+            ? this.joinBuilder<NewTable>(cls as JoinBuilder<NewTable>, "JOIN")
+            : this.addJoin<NewTable>(joinOptions<NewTable>("JOIN", cls as NewTable, options))
     }
-    leftJoin<NewTable>(cls:Constructor<NewTable>|JoinBuilder, 
+    leftJoin<NewTable extends Constructor<any>>(cls:NewTable|JoinBuilder<NewTable>, 
         options?:{ 
-        on?:(from: InstanceType<Last<Tables>>, to: NewTable, table:InstanceType<First<Tables>>) => Fragment, 
+        on?:OnJoin<Last<Tables>, NewTable, First<Tables>>
         as?:string 
     }|SqlBuilder) {
         return (cls as any).tables
-            ? this.joinBuilder<NewTable>(cls as JoinBuilder, "LEFT JOIN")
-            : this.addJoin<NewTable>(joinOptions<NewTable>("LEFT JOIN", cls as Constructor<NewTable>, options))
+            ? this.joinBuilder<NewTable>(cls as JoinBuilder<NewTable>, "LEFT JOIN")
+            : this.addJoin<NewTable>(joinOptions<NewTable>("LEFT JOIN", cls as NewTable, options))
     }
-    rightJoin<NewTable>(cls:Constructor<NewTable>|JoinBuilder, 
+    rightJoin<NewTable extends Constructor<any>>(cls:NewTable|JoinBuilder<NewTable>, 
         options?:{ 
-        on?:(from: InstanceType<Last<Tables>>, to: NewTable, table:InstanceType<First<Tables>>) => Fragment, 
+        on?:OnJoin<Last<Tables>, NewTable, First<Tables>>
         as?:string 
     }|SqlBuilder) {
         return (cls as any).tables
-            ? this.joinBuilder<NewTable>(cls as JoinBuilder, "RIGHT JOIN")
-            : this.addJoin<NewTable>(joinOptions<NewTable>("RIGHT JOIN", cls as Constructor<NewTable>, options))
+            ? this.joinBuilder<NewTable>(cls as JoinBuilder<NewTable>, "RIGHT JOIN")
+            : this.addJoin<NewTable>(joinOptions<NewTable>("RIGHT JOIN", cls as NewTable, options))
     }
-    fullJoin<NewTable>(cls:Constructor<NewTable>|JoinBuilder, 
+    fullJoin<NewTable extends Constructor<any>>(cls:NewTable|JoinBuilder<NewTable>, 
         options?:{ 
-        on?:(from: InstanceType<Last<Tables>>, to: NewTable, table:InstanceType<First<Tables>>) => Fragment, 
+        on?:OnJoin<Last<Tables>, NewTable, First<Tables>>
         as?:string 
     }|SqlBuilder) {
         return (cls as any).tables
-            ? this.joinBuilder<NewTable>(cls as JoinBuilder, "FULL JOIN")
-            : this.addJoin<NewTable>(joinOptions<NewTable>("FULL JOIN", cls as Constructor<NewTable>, options))
+            ? this.joinBuilder<NewTable>(cls as JoinBuilder<NewTable>, "FULL JOIN")
+            : this.addJoin<NewTable>(joinOptions<NewTable>("FULL JOIN", cls as NewTable, options))
     }
-    crossJoin<NewTable>(cls:Constructor<NewTable>|JoinBuilder, 
+    crossJoin<NewTable extends Constructor<any>>(cls:NewTable|JoinBuilder<NewTable>, 
         options?:{ 
-        on?:(from: InstanceType<Last<Tables>>, to: NewTable, table:InstanceType<First<Tables>>) => Fragment, 
+        on?:OnJoin<Last<Tables>, NewTable, First<Tables>>
         as?:string 
     }|SqlBuilder) {
         return (cls as any).tables
-            ? this.joinBuilder<NewTable>(cls as JoinBuilder, "CROSS JOIN")
-            : this.addJoin<NewTable>(joinOptions<NewTable>("CROSS JOIN", cls as Constructor<NewTable>, options))
+            ? this.joinBuilder<NewTable>(cls as JoinBuilder<NewTable>, "CROSS JOIN")
+            : this.addJoin<NewTable>(joinOptions<NewTable>("CROSS JOIN", cls as NewTable, options))
     }
 
-    where(options:WhereOptions|TemplateStringsArray|Function, ...params:any[]) { 
+    where(options:WhereOptions|TemplateStringsArray|((...params:TypeRefs<Tables>) => Fragment), ...params:any[]) { 
         return this.and(options, ...params)
     }
 
-    and(options:WhereOptions|TemplateStringsArray|Function, ...params:any[]) {
+    and(options:WhereOptions|TemplateStringsArray|((...params:TypeRefs<Tables>) => Fragment), ...params:any[]) {
         if (!options && params.length == 0) {
             this._where.length = 0
             return this
@@ -267,7 +278,7 @@ export class WhereQuery<Tables extends Constructor<any>[]> {
         }
     }
 
-    or(options:WhereOptions|TemplateStringsArray|Function, ...params:any[]) { 
+    or(options:WhereOptions|TemplateStringsArray|((...params:TypeRefs<Tables>) => Fragment), ...params:any[]) { 
         if (!options && params.length == 0) {
             this._where.length = 0
         } else if (Array.isArray(options)) {

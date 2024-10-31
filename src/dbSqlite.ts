@@ -193,4 +193,5 @@ class SqliteDriver implements Driver
 export const driver =  new SqliteDriver(create())
 export const sync = driver.sync
 export const sql = driver.sql
+export const $ = driver.sql
 export default driver

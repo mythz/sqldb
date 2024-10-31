@@ -1,5 +1,17 @@
 import { SyncConnection } from "./connection";
 
+export type LastN<T extends any[], N extends number> = T extends [...any[], ...infer U] 
+  ? U['length'] extends N 
+    ? U 
+    : never 
+  : never;
+  export type First<T extends any[]> = T extends [infer L, ...any[]] ? L : never;
+export type Last<T extends any[]> = T extends [...any[], infer L] ? L : never;
+export type ConstructorsToRefs<T extends Constructor<any>[]> = {
+    [K in keyof T]: TypeRef<InstanceType<T[K]>>
+}
+
+
 export type Params = Record<string, any> | any[];
 
 export type DbBinding =
@@ -169,4 +181,27 @@ export type ConstructorToTypeRef<T extends readonly any[]> = {
         : never;
 }
 
-export type JoinType = "JOIN" | "INNER JOIN" | "LEFT JOIN" | "RIGHT JOIN" | "OUTER JOIN" | "CROSS JOIN"
+export type JoinType = "JOIN" | "INNER JOIN" | "LEFT JOIN" | "RIGHT JOIN" | "OUTER JOIN" | "FULL JOIN" | "CROSS JOIN"
+
+export type TypeRefs<Tables extends Constructor<any>[]> = {
+    [K in keyof Tables]: TypeRef<InstanceType<Tables[K]>>
+}
+
+export type JoinParams = { 
+    on?:string | ((...params:any[]) => Fragment),
+    as?:string
+    params?:Record<string,any>
+}
+
+export type JoinDefinition = { 
+    type:JoinType
+    table:string
+    on?:string 
+    as?:string
+    params?:Record<string,any> 
+}
+
+export interface JoinBuilder {
+    get tables(): Constructor<any>[]
+    build(refs:ConstructorsToRefs<any>, type:JoinType) : JoinDefinition
+}

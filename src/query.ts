@@ -1,6 +1,6 @@
-import type { ClassParam, Constructor, ConstructorToTypeRef, Driver, Fragment, JoinType, ReflectMeta, SqlBuilder, TypeRef, WhereOptions } from "./types"
+import type { Constructor, ConstructorToTypeRef, Driver, Fragment, TypeRef } from "./types"
 import { Meta, Schema } from "./connection"
-import { CreateJoin } from "./queryTyped"
+import { SqlJoinBuilder } from "./builders/where"
 
 export class Sql
 {
@@ -55,12 +55,6 @@ export function createSql(driver:Driver) {
             return ({ sql:strings, params:params[0] })
         } else throw new Error(`sql(${typeof strings}) is invalid`)
     }
-    // sql.column = function<T extends ClassParam>(cls:T, prop:string) {
-    //     const meta = Schema.assertMeta(cls)
-    //     const column = meta.props.find(x => x.name == prop)?.column
-    //     if (!column) throw new Error(`Could not find column ${prop} on ${meta.name}`)
-    //     return { sql:driver.quoteColumn(column.name) }
-    // }
 
     function quote(meta:Meta, prop:string) {
         const p = meta.props.find(x => x.name == prop)?.column
@@ -80,13 +74,13 @@ export function createSql(driver:Driver) {
     sql.refs = function refs<T extends readonly Constructor[]>(...classes: [...T]): ConstructorToTypeRef<T> {
         return classes.map(cls => sql.ref(cls)) as ConstructorToTypeRef<T>
     }
-    sql.join = function<JoinTables extends Constructor<any>[]>(...joinTables:any[]) {
-        return new CreateJoin<JoinTables>(joinTables)
+    sql.join = function<JoinTables extends Constructor<any>[]>(...joinTables:JoinTables) {
+        return new SqlJoinBuilder<JoinTables>(driver, sql, ...joinTables)
     }
 
     return sql
 }
-
+/*
 export type Join = {
     join:  JoinType 
     table: string
@@ -515,3 +509,4 @@ export class DeleteQuery<Table> extends WhereQuery<Table> {
         return { sql, params:this.params }
     }
 }
+*/

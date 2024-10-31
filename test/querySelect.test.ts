@@ -1,7 +1,7 @@
+import type { SqlBuilder } from '../src/types'
 import { describe, it, expect } from 'bun:test'
 import { Contact, DynamicPerson, Freight, Order, OrderItem, Person } from './data'
-import { sync as db, sql } from '../src/dbSqlite'
-import { SqlBuilder } from '../src/types'
+import { sync as db, sql, $ } from '../src/dbSqlite'
 
 const selectContact = 'id,firstName,lastName,email,phone,address,city,state,postCode,createdAt,updatedAt'
     .split(',').map(c => `"${c}"`).join(', ')
@@ -147,15 +147,15 @@ describe('SQLite SelectQuery Tests', () => {
 
     it ('Does return correct refs', () => {
         var q = db.from(Order), 
-            o = q.ref()
+            o = q.ref
 
         expect(o.$ref.cls).toBe(Order)
 
         q = q.join(Contact, { 
-            on:(o:Order, c:Contact) => sql`${o.contactId} = ${c.id}` 
+            on:(o:Order, c:Contact) => $`${o.contactId} = ${c.id}` 
         })
 
-        expect(q.ref().$ref.cls).toBe(Order)
+        expect(q.ref.$ref.cls).toBe(Order)
         expect(q.refOf(Order)!.$ref.cls).toBe(Order)
         expect(q.refOf(Contact)!.$ref.cls).toBe(Contact)
 
@@ -263,24 +263,22 @@ describe('SQLite SelectQuery Tests', () => {
         expect(str(db.from(Contact).alias('c')
             .join(Order, { on:(c:Contact, o:Order) => sql`${c.id} = ${o.contactId}` })
             .join(OrderItem, { on:(o:Order, i:OrderItem) => sql`${o.id} = ${i.orderId}` })
-            .leftJoin([Freight,Order], { on:(f:Freight, o:Order, c:Contact) => sql`${o.freightId} = ${f.id}` })
+            .leftJoin(sql.join(Freight,Order).on((f, o) => $`${o.freightId} = ${f.id}`))
             .select('*')
         )).toContain(`FROM "Contact" c JOIN "Order" ON c."id" = "Order"."contactId" JOIN "OrderItem" ON "Order"."id" = "OrderItem"."orderId" LEFT JOIN "Freight" ON "Order"."freightId" = "Freight"."id"`)
         
         expect(str(db.from(Contact).alias('c')
             .join(Order, { on:(c:Contact, o:Order) => sql`${c.id} = ${o.contactId}` })
-            .join([OrderItem,Order,Freight], { 
-                on:(i:OrderItem, o:Order, f:Freight, c:Contact) => sql`${o.id} = ${i.orderId} LEFT JOIN ${f} ON ${o.freightId} = ${f.id}` 
-            })
+            .join(sql.join(OrderItem,Order,Freight).as('i')
+                .on((i, o, f) => $`${o.id} = ${i.orderId} LEFT JOIN ${f} ON ${o.freightId} = ${f.id}`))
             .select('*')
         )).toContain(`FROM "Contact" c JOIN "Order" ON c."id" = "Order"."contactId"`
             + ' JOIN "OrderItem" ON "Order"."id" = "OrderItem"."orderId"'
             + ' LEFT JOIN "Freight" ON "Order"."freightId" = "Freight"."id"'
         )
         expect(str(db.from(Contact).alias('c')
-            .join([Order,OrderItem,Freight], { 
-                on:(o:Order, i:OrderItem, f:Freight, c:Contact) => sql`${c.id} = ${o.contactId} JOIN ${i} ON ${o.id} = ${i.orderId} LEFT JOIN ${f} ON ${o.freightId} = ${f.id}` 
-            })
+            .join(sql.join(Order,OrderItem,Freight,Contact)
+                .on((o, i, f, c) => $`${c.id} = ${o.contactId} JOIN ${i} ON ${o.id} = ${i.orderId} LEFT JOIN ${f} ON ${o.freightId} = ${f.id}`))
             .select('*')
         )).toContain(`FROM "Contact" c JOIN "Order" ON c."id" = "Order"."contactId"`
             + ' JOIN "OrderItem" ON "Order"."id" = "OrderItem"."orderId"'

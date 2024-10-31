@@ -1,5 +1,11 @@
-import { createSql, SelectQuery, sql, UpdateQuery } from "./query"
-import type { Driver, DbBinding, ReflectMeta, ClassParam, ClassInstance, TableDefinition, Fragment, SqlBuilder, Statement, Constructor } from "./types"
+import type { 
+    Driver, DbBinding, ReflectMeta, ClassParam, ClassInstance, TableDefinition, 
+    Fragment, SqlBuilder, Statement, Constructor 
+} from "./types"
+import { DeleteQuery } from "./builders/delete"
+import { SelectQuery } from "./builders/select"
+import { UpdateQuery } from "./builders/update"
+import { createSql } from "./query"
 import { keysWithValues as propsWithValues } from "./utils"
 
 export class Meta {
@@ -223,14 +229,14 @@ export class ConnectionBase {
         this.sql = (driver as any).sql ?? createSql(driver)
     }
     quote(symbol:string) { return this.driver.quote(symbol) }
-    from<Table>(table:Constructor<Table>) { 
-        return new SelectQuery<Table>(Schema.assertMeta(table), this.driver) 
+    from<Table extends Constructor<any>>(table:Table) { 
+        return new SelectQuery(this.driver, [table], [Schema.assertMeta(table)], [this.sql.ref(table,'')]) 
     }
-    updateFor<Table>(table:Constructor<Table>) { 
-        return new UpdateQuery<Table>(Schema.assertMeta(table), this.driver) 
+    updateFor<Table extends Constructor<any>>(table:Table) { 
+        return new UpdateQuery(this.driver, [table], [Schema.assertMeta(table)], [this.sql.ref(table,'')]) 
     }
-    deleteFrom<Table>(table:Constructor<Table>) { 
-        return new UpdateQuery<Table>(Schema.assertMeta(table), this.driver) 
+    deleteFrom<Table extends Constructor<any>>(table:Table) { 
+        return new DeleteQuery(this.driver, [table], [Schema.assertMeta(table)], [this.sql.ref(table,'')]) 
     }
 }
 

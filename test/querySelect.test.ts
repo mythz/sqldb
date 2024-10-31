@@ -252,6 +252,10 @@ describe('SQLite SelectQuery Tests', () => {
     })
 
     it ('Can join multiple tables', () => {
+        let q1 = db.from(Contact).alias('c')
+        let q2 = q1.join(Order, { on:(c, o) => $`${c.id} = ${o.contactId}` })
+        let q3 = q2.join(OrderItem, { on:(o:Order, i:OrderItem, c:Contact) => $`${o.id} = ${i.orderId}` })
+        
         expect(str(db.from(Contact).alias('c').join(Order, { on:(c:Contact, o:Order) => sql`${c.id} = ${o.contactId}` })))
             .toContain(`FROM "Contact" c JOIN "Order" ON c."id" = "Order"."contactId"`)
         

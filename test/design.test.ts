@@ -51,7 +51,6 @@ function fromDelete<Table>(table: Constructor<Table>) {
     return new DeleteQuery(new Driver, [table], [new Meta], [{ } as TypeRef<Table>]) 
 }
 
-
 function example() {
 
     const qSelect = fromSelect(A)

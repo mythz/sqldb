@@ -24,7 +24,7 @@ export class SelectQuery<Tables extends Constructor<any>[]> extends WhereQuery<T
                 this.addParams(params[0])
             }
         } else if (Array.isArray(options)) {
-            this._select.push(this.mergeParams(this.sql(options as TemplateStringsArray, ...params)))
+            this._select.push(this.mergeParams(this.$(options as TemplateStringsArray, ...params)))
         } else if (typeof options === 'object') {
             const o = options as SelectOptions
             if (o.sql) {

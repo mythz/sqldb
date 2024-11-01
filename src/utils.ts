@@ -19,3 +19,19 @@ export function toLocalISOString(d: Date = new Date()) {
 export function keysWithValues(obj:Record<string,any>) {
     return Object.keys(obj).filter(k => obj[k] != null)
 }
+
+export function uniqueKeys(rows:any[]) : string[] {
+    let to:string[] = []
+    rows.forEach(o => Object.keys(o).forEach(k => {
+        if (to.indexOf(k) === -1) {
+            to.push(k)
+        }
+    }))
+    return to
+} 
+
+export function toStr(value:any) {
+    return typeof value == 'symbol'
+        ? `:${value.description ?? ''}`
+        : `${value}`
+}

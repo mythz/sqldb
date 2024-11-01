@@ -63,11 +63,11 @@ export class Schema {
     static assertClass(table:ClassParam) : ReflectMeta {
         if (!table)
             throw new Error(`Class must be provided`)
-        const cls = (table?.constructor?.$id
+        const cls = ( (table?.constructor as any)?.$id
             ? table?.constructor
-            : table.$id ? table : null) as ReflectMeta
+            : (table as any).$id ? table : null) as ReflectMeta
         if (!cls) {
-            const name = table?.name ?? table?.constructor?.name
+            const name = (table as any)?.name ?? table?.constructor?.name
             if (!name)
                 throw new Error(`Class or constructor function required`)
             else if (typeof table === 'function' || typeof table.constructor === 'function') 
@@ -186,7 +186,7 @@ export class Schema {
 
     static toDbBindings(table:ClassInstance, driver:Driver) {
         const values:DbBinding[] = []
-        const meta = Schema.assertMeta(table.constructor)
+        const meta = Schema.assertMeta(table.constructor as ReflectMeta)
         const props = meta.props.filter(x => x.column!!)
 
         props.forEach(x => {
@@ -204,7 +204,7 @@ export class Schema {
 
     static toDbObject(table:ClassInstance, driver:Driver, options?:{ onlyProps?:string[] }) {
         const values: { [key:string]: DbBinding } = {}
-        const meta = Schema.assertMeta(table.constructor)
+        const meta = Schema.assertMeta(table.constructor as ReflectMeta)
         const props = meta.props.filter(x => x.column!!)
 
         for (const x of props) {
@@ -224,19 +224,19 @@ export class Schema {
 }
 
 export class ConnectionBase {
-    sql:ReturnType<typeof createSql>
+    $:ReturnType<typeof createSql>
     constructor(public driver:Driver) {
-        this.sql = (driver as any).sql ?? createSql(driver)
+        this.$ = (driver as any).sql ?? createSql(driver)
     }
     quote(symbol:string) { return this.driver.quote(symbol) }
     from<Table extends Constructor<any>>(table:Table) { 
-        return new SelectQuery(this.driver, [table], [Schema.assertMeta(table)], [this.sql.ref(table,'')]) 
+        return new SelectQuery(this.driver, [table], [Schema.assertMeta(table)], [this.$.ref(table,'')]) 
     }
     updateFor<Table extends Constructor<any>>(table:Table) { 
-        return new UpdateQuery(this.driver, [table], [Schema.assertMeta(table)], [this.sql.ref(table,'')]) 
+        return new UpdateQuery(this.driver, [table], [Schema.assertMeta(table)], [this.$.ref(table,'')]) 
     }
     deleteFrom<Table extends Constructor<any>>(table:Table) { 
-        return new DeleteQuery(this.driver, [table], [Schema.assertMeta(table)], [this.sql.ref(table,'')]) 
+        return new DeleteQuery(this.driver, [table], [Schema.assertMeta(table)], [this.$.ref(table,'')]) 
     }
 }
 
@@ -398,6 +398,5 @@ export class SyncConnection extends ConnectionBase {
 export class NamingStrategy {
     tableName(table:string) : string { return table }
     columnName(column:string) : string { return column }
-    schemaFromDef(def:TableDefinition) : string | undefined { return def.schema }
     tableFromDef(def:TableDefinition) : string { return def.alias ?? def.name }
 }

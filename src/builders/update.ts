@@ -1,5 +1,4 @@
-import { Meta } from "../connection"
-import { Constructor, Driver, Fragment } from "../types"
+import { Constructor, Fragment } from "../types"
 import { WhereQuery } from "./where"
 
 export class UpdateQuery<Tables extends Constructor<any>[]> extends WhereQuery<Tables> {

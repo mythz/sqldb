@@ -97,7 +97,7 @@ class SqliteDriver implements Driver
     db:Database
     sync: SyncConnection
     name: string
-    sql:ReturnType<typeof createSql>
+    $:ReturnType<typeof createSql>
     strategy:NamingStrategy = new NamingStrategy()
     variables: { [key: string]: string } = {
         [DefaultValues.NOW]: 'CURRENT_TIMESTAMP',
@@ -115,7 +115,7 @@ class SqliteDriver implements Driver
         this.db = db
         this.sync = new SyncConnection(this)
         this.name = this.constructor.name
-        this.sql = createSql(this)
+        this.$ = createSql(this)
     }
 
     quote(name: string): string { return `"${name}"` }
@@ -192,6 +192,5 @@ class SqliteDriver implements Driver
 
 export const driver =  new SqliteDriver(create())
 export const sync = driver.sync
-export const sql = driver.sql
-export const $ = driver.sql
+export const $ = driver.$
 export default driver

@@ -1,9 +1,10 @@
-import type { Constructor, ConstructorsToRefs, ConstructorToTypeRef, Driver, First, Fragment, JoinBuilder, JoinDefinition, JoinParams, JoinType, Last, SqlBuilder, TypeRef, TypeRefs, WhereOptions } from "../types"
+import type { Constructor, ConstructorsToRefs, Driver, First, Fragment, JoinBuilder, JoinDefinition, JoinParams, JoinType, Last, SqlBuilder, TypeRef, TypeRefs, WhereOptions } from "../types"
 import { Meta, Schema } from "../connection"
 import { createSql, Sql } from "../query"
 import { SelectQuery } from "./select"
 import { DeleteQuery } from "./delete"
 import { UpdateQuery } from "./update"
+import { toStr } from "../utils"
 
 type OnJoin<
     First extends Constructor<any>, 
@@ -32,18 +33,22 @@ function joinOptions<NewTable extends Constructor<any>>(type:JoinType,
     } else throw new Error(`Invalid Join Option: ${typeof options}`)
 }
 
+function nextParam(params:Record<string,any>) {
+    const positionalParams = Object.keys(params).map(x => parseInt(x)).filter(x => !isNaN(x))
+    return positionalParams.length == 0
+        ? 1
+        : Math.max(...positionalParams) + 1
+}
+
 function mergeParams(params:Record<string,any>, f:Fragment) {
     let sql = f.sql
     if (f.params && typeof f.params == 'object') {
         for (const [key, value] of Object.entries(f.params)) {
             const exists = key in params && !isNaN(parseInt(key))
             if (exists) {
-                const positionalParams = Object.keys(params).map(x => parseInt(x)).filter(x => !isNaN(x))
-                const nextParam = positionalParams.length == 0
-                    ? 1
-                    : Math.max(...positionalParams) + 1
-                sql = sql.replaceAll(`$${key}`,`$${nextParam}`)
-                params[nextParam] = value
+                const nextvalue = nextParam(params)
+                sql = sql.replaceAll(`$${key}`,`$${nextvalue}`)
+                params[nextvalue] = value
             } else {
                 params[key] = value
             }
@@ -108,10 +113,10 @@ export class WhereQuery<Tables extends Constructor<any>[]> {
         public metas:Meta[], 
         public refs: TypeRefs<Tables>
     ) {
-        this.sql = (driver as any).sql ?? createSql(driver)
+        this.$ = (driver as any).$ ?? createSql(driver)
     }
 
-    sql:ReturnType<typeof createSql>
+    $:ReturnType<typeof createSql>
     protected _where:{ condition:string, sql?:string }[] = []
     protected _joins:JoinDefinition[] = []
     public params:Record<string,any> = {}
@@ -148,7 +153,7 @@ export class WhereQuery<Tables extends Constructor<any>[]> {
         table: NewTable
     ) : This<typeof this, [...Tables, NewTable]> {
         const meta = {} as Meta
-        const ref = this.sql.ref(table)
+        const ref = this.$.ref(table)
         
         return new (this.constructor as any)(
             this.driver,
@@ -180,7 +185,7 @@ export class WhereQuery<Tables extends Constructor<any>[]> {
 
         // Fully qualify Table ref if it has no alias
         if (!q.refs[0].$ref.as) {
-            q.refs[0] = q.sql.ref(q.meta.cls, q.quoteTable(q.meta.tableName))
+            q.refs[0] = q.$.ref(q.meta.cls as First<Tables>, q.quoteTable(q.meta.tableName))
         }
 
         let on = ''
@@ -201,9 +206,9 @@ export class WhereQuery<Tables extends Constructor<any>[]> {
     joinBuilder<NewTable extends Constructor<any>>(builder:JoinBuilder<NewTable>, typeHint:JoinType="JOIN") {
         const cls = builder.tables[0] as NewTable
         const q = this.createInstance(cls)
-        this.copyInto(q)
+        this.copyInto(q as WhereQuery<any>)
 
-        const refs = builder.tables.map(cls => this.refOf(cls) ?? this.sql.ref(cls))
+        const refs = builder.tables.map(cls => this.refOf(cls) ?? this.$.ref(cls))
         let { type, table, on, as, params } = builder.build(refs, typeHint)
         if (on && params) {
             on = this.mergeParams({ sql:on, params })
@@ -269,7 +274,7 @@ export class WhereQuery<Tables extends Constructor<any>[]> {
             this._where.length = 0
             return this
         } else if (Array.isArray(options)) {
-            return this.condition('AND', { sql: this.sql(options as TemplateStringsArray, ...params) }) 
+            return this.condition('AND', { sql: this.$(options as TemplateStringsArray, ...params) }) 
         } else if (typeof options == 'function') {
             const sql = Schema.assertSql(options.call(this, ...this.refs))
             return this.condition('AND', { sql })
@@ -281,9 +286,12 @@ export class WhereQuery<Tables extends Constructor<any>[]> {
     or(options:WhereOptions|TemplateStringsArray|((...params:TypeRefs<Tables>) => Fragment), ...params:any[]) { 
         if (!options && params.length == 0) {
             this._where.length = 0
+            return this
         } else if (Array.isArray(options)) {
-            return this.condition('OR', { sql: this.sql(options as TemplateStringsArray, ...params) }) 
+            return this.condition('OR', { sql: this.$(options as TemplateStringsArray, ...params) }) 
         } else if (typeof options == 'function') {
+            const sql = Schema.assertSql(options.call(this, ...this.refs))
+            return this.condition('OR', { sql })
         } else {
             return this.condition('OR', options as WhereOptions) 
         }
@@ -305,7 +313,7 @@ export class WhereQuery<Tables extends Constructor<any>[]> {
         }
         for (const [op, values] of Object.entries(options)) {
             if (Sql.opKeys.includes(op)) {
-                this.addWhere(condition, Sql.ops[op], values)
+                this.addWhere(condition, Sql.ops[op], values, op)
             } else if (op === 'op' && Array.isArray(values) && values.length >= 2) {
                 const [ sqlOp, params ] = values
                 this.addWhere(condition, sqlOp, params)
@@ -324,7 +332,7 @@ export class WhereQuery<Tables extends Constructor<any>[]> {
     }
 
     alias(alias?:string) {
-        this.refs[0] = this.sql.ref(this.refs[0].$ref.cls, alias)
+        this.refs[0] = this.$.ref(this.refs[0].$ref.cls, alias)
         return this
     }
 
@@ -356,17 +364,51 @@ export class WhereQuery<Tables extends Constructor<any>[]> {
         return sql
     }
 
-    private addWhere(condition:string, sqlOp:string, values:any) {
+    private addWhere(condition:string, sqlOp:string, values:any, op?:string) {
         if (!condition) throw new Error('condition is required')
         if (!sqlOp) throw new Error('sqlOp is required')
         if (!values) throw new Error('values is required')
-        for (const [key, value] of Object.entries(values)) {
-            const prop = this.meta.props.find(x => x.name === key)
-            if (!prop) throw new Error(`Property ${key} not found in ${this.meta.name}`)
-            if (!prop.column) throw new Error(`Property ${key} is not a column`)
-            this._where.push({ condition, sql:`${this.driver.quoteColumn(prop.column.name)} ${sqlOp} $${prop.name}`})
-            this.params[prop.name] = value
-        }
+        if (op === 'isNull' || op === 'notNull') {
+            if (!Array.isArray(values)) throw new Error(`${op} requires an array of property names, but was: ${toStr(values)}`)
+            let columnNames = [] as string[]
+            for (const key of values) {
+                const prop = this.meta.props.find(x => x.name === key)
+                if (!prop) throw new Error(`Property ${key} not found in ${this.meta.name}`)
+                if (!prop.column) throw new Error(`Property ${key} is not a column`)
+                columnNames.push(prop.column.name)
+            }
+            const sql = columnNames.map(name => `${this.driver.quoteColumn(name)} ${Sql.ops[op]}`).join(` ${condition} `)
+            this._where.push({ condition, sql })
+            //console.log('addWhere', condition, sqlOp, values, op)
+            //return
+        } else if (typeof values == 'object') {
+            for (const [key, value] of Object.entries(values)) {
+                const prop = this.meta.props.find(x => x.name === key)
+                if (!prop) throw new Error(`Property ${key} not found in ${this.meta.name}`)
+                if (!prop.column) throw new Error(`Property ${key} is not a column`)
+                const sqlLeft = `${this.driver.quoteColumn(prop.column.name)} ${sqlOp}`
+                if (Array.isArray(value)) {
+                    let sqlValues = ``
+                    for (const v in value) {
+                        if (sqlValues) sqlValues += ','
+                        const nextValue = nextParam(this.params)
+                        sqlValues += `$${nextValue}`
+                        this.params[nextValue] = v
+                    }
+                    this._where.push({ condition, sql:`${sqlLeft} (${sqlValues})`})
+                } else {
+                    this._where.push({ condition, sql:`${sqlLeft} $${prop.name}`})
+                    let paramValue = op === 'startsWith'
+                        ? `${value}%`
+                        : op === 'endsWith'
+                        ? `%${value}`
+                        : op === 'contains'
+                        ? `%${value}%`
+                        : value
+                    this.params[prop.name] = paramValue
+                }
+            }
+        } else throw new Error(`Unsupported ${condition} value: ${values}`)
     }
 
     buildWhere() {

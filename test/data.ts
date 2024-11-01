@@ -13,6 +13,9 @@ export class Contact {
     @column(DataType.TEXT, { required: true })
     lastName: string = ''
     
+    @column(DataType.INTEGER)
+    age?: number
+    
     @column(DataType.TEXT, { required: true })
     email: string = ''
     

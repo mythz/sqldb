@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'bun:test'
 import type { SqlBuilder } from '../src/types'
 import { Contact, DynamicPerson, Freight, Order, OrderItem, Person } from './data'
-import { sync as db, sql, $ } from '../src/dbSqlite'
+import { sync as db, $ } from '../src/dbSqlite'
 import { str } from './utils'
 
 describe('SQLite SelectQuery Tests', () => {
@@ -14,10 +14,10 @@ describe('SQLite SelectQuery Tests', () => {
             columns: ['id', 'city']
         }))).toContain('"id", "city"')
         expect(str(db.from(Contact).select({
-            sql: sql('id,city')
+            sql: $('id,city')
         }))).toContain('id,city')
         expect(str(db.from(Contact).select({
-            sql: [sql('id'),sql('city')]
+            sql: [$('id'),$('city')]
         }))).toContain('id, city')
         expect(str(db.from(Contact).select({
             columns: ['id', 'city']
@@ -28,7 +28,7 @@ describe('SQLite SelectQuery Tests', () => {
         expect(str(db.from(Contact).select(
             (c:Contact) => $`${c.id}, ${c.city}`)
         )).toContain('"id", "city"')
-        const p = sql.ref(Person,'')
+        const p = $.ref(Person,'')
         expect(str(db.from(Contact).select(
             (c:Contact) => $`${c.id}, ${c.city}, ${p.surname}`)
         )).toContain('"id", "city", "lastName"')
@@ -42,7 +42,7 @@ describe('SQLite SelectQuery Tests', () => {
         expect(str(db.from(Contact).alias('c')
             .join(Order, { on:(c:Contact, o:Order) => $`${c.id} = ${o.contactId}` })
             .join(OrderItem, { on:(o:Order, i:OrderItem) => $`${o.id} = ${i.orderId}` })
-            .leftJoin(sql.join(Freight,Order).on((f, o) => $`${o.freightId} = ${f.id}`))
+            .leftJoin($.join(Freight,Order).on((f, o) => $`${o.freightId} = ${f.id}`))
             .select((c, o, i, f) => $`${c.firstName}, ${o.contactId}, ${i.orderId}, ${f.name}`)))
         .toContain("FROM")
         
@@ -56,10 +56,10 @@ describe('SQLite SelectQuery Tests', () => {
             columns: ['id','email']
         }))).toContain('"id", "email"')
         expect(str(db.from(Person).select({
-            sql: sql('id,email')
+            sql: $('id,email')
         }))).toContain('id,email')
         expect(str(db.from(Person).select({
-            sql: [sql('id'),sql('email')]
+            sql: [$('id'),$('email')]
         }))).toContain('id, email')
         expect(str(db.from(Person).select({
             columns: ['id', 'email']
@@ -71,7 +71,7 @@ describe('SQLite SelectQuery Tests', () => {
             (c:Person) => $`${c.key}, ${c.name}`)
         )).toContain('"id", "firstName"')
         
-        const c = sql.ref(Contact,'')
+        const c = $.ref(Contact,'')
         expect(str(db.from(Person).select(
             (p:Person) => $`${p.key}, ${p.name}, ${c.city}`)
         )).toContain('"id", "firstName", "city"')
@@ -88,10 +88,10 @@ describe('SQLite SelectQuery Tests', () => {
             columns: ['id', 'email']
         }))).toContain('"id", "email"')
         expect(str(db.from(DynamicPerson).select({
-            sql: sql('id,email')
+            sql: $('id,email')
         }))).toContain('id,email')
         expect(str(db.from(DynamicPerson).select({
-            sql: [sql('id'),sql('email')]
+            sql: [$('id'),$('email')]
         }))).toContain('id, email')
         expect(str(db.from(DynamicPerson).select({
             columns: ['id', 'email']
@@ -103,7 +103,7 @@ describe('SQLite SelectQuery Tests', () => {
             (c:DynamicPerson) => $`${c.key}, ${c.name}`)
         )).toContain('"id", "firstName"')
 
-        const c = sql.ref(Contact,'')
+        const c = $.ref(Contact,'')
         expect(str(db.from(DynamicPerson).select(
             (p:DynamicPerson) => $`${p.key}, ${p.name}, ${c.city}`)
         )).toContain('"id", "firstName", "city"')
@@ -159,7 +159,7 @@ describe('SQLite SelectQuery Tests', () => {
         ;((expectedSql, expectedParams) => {
             
             var q = db.from(Order)
-            var [o, c] = sql.refs(Order,Contact)
+            var [o, c] = $.refs(Order,Contact)
 
             q = q.join(Contact, { 
                 on:() => $`${o.contactId} = ${c.id}` 
@@ -173,7 +173,7 @@ describe('SQLite SelectQuery Tests', () => {
                 expectedSql, expectedParams)
 
             var q = db.from(Order)
-            var [o, c] = sql.refs(Order,Contact)
+            var [o, c] = $.refs(Order,Contact)
     
             assert(q
                 //.join(c).on`${o.contactId} = ${c.id}`

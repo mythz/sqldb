@@ -5,15 +5,21 @@ export type LastN<T extends any[], N extends number> = T extends [...any[], ...i
     ? U 
     : never 
   : never;
-  export type First<T extends any[]> = T extends [infer L, ...any[]] ? L : never;
+export type First<T extends any[]> = T extends [infer L, ...any[]] ? L : never;
 export type Last<T extends any[]> = T extends [...any[], infer L] ? L : never;
 export type ConstructorsToRefs<T extends Constructor<any>[]> = {
     [K in keyof T]: TypeRef<InstanceType<T[K]>>
 }
 
-
 export type Params = Record<string, any> | any[];
 
+export type ScalarValue = 
+    | string
+    | bigint
+    | number
+    | boolean
+    | null
+    | symbol
 export type DbBinding =
     | string
     | bigint
@@ -147,30 +153,22 @@ export interface SqlBuilder {
 }
 
 
-
 export type WhereOptions = { 
-    eq?:      Record<string,any>
-    '='?:     Record<string,any>
-    notEq?:   Record<string,any> 
-    '!='?:    Record<string,any>
-    gt?:      Record<string,any> 
-    '>'?:     Record<string,any>
-    gte?:     Record<string,any> 
-    '>='?:    Record<string,any>
-    lt?:      Record<string,any> 
-    '<'?:     Record<string,any>
-    lte?:     Record<string,any>
-    '<='?:    Record<string,any>
-    in?:      Record<string,any>
-    notIn?:   Record<string,any>
-    like?:    Record<string,any>
-    notLike?: Record<string,any>
-    isNull?:  Record<string,any>
-    notNull?: Record<string,any>
-    op?:      [string, Record<string,any>]
-    sql?:     Fragment|Fragment[] 
-    rawSql?:  string|string[]
-    params?:  Record<string,any>
+    equals?:     Record<string,ScalarValue>
+    notEquals?:  Record<string,ScalarValue>
+    like?:       Record<string,ScalarValue>
+    notLike?:    Record<string,ScalarValue>
+    startsWith?: Record<string,ScalarValue>
+    endsWith?:   Record<string,ScalarValue>
+    contains?:   Record<string,ScalarValue>
+    in?:         Record<string,ScalarValue[]>
+    notIn?:      Record<string,ScalarValue[]>
+    isNull?:     string[]
+    notNull?:    string[]
+    op?:         [string, Record<string,any>]
+    sql?:        Fragment|Fragment[] 
+    rawSql?:     string|string[]
+    params?:     Record<string,any>
 }
 
 export type TypeRef<T> = T & { $ref: { cls:Constructor<T>, as?:string } }

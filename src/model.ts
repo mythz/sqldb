@@ -1,4 +1,4 @@
-import { ColumnType } from "./types";
+import { ColumnType, Constructor } from "./types";
 
 export enum DataType {
     INTEGER = 'INTEGER',
@@ -115,20 +115,21 @@ type ColumnsConfig<T> = {
     [K in keyof Partial<T>]: ColumnConfig;
 };
 
-export function Table<T extends object>(
+export function Table<T extends Constructor<any>>(
     cls: new () => T,
     definition: TableDefinition<T>) {
     if (!definition) throw new Error('Table definition is required')
 
-    if (!cls.$id) cls.$id = Symbol(cls.name)
+    const meta = cls as any
+    if (!meta.$id) meta.$id = Symbol(cls.name)
         // Set the table name and alias if provided
-    cls.$type ??= { name:cls.name }
-    cls.$type.table = definition.table ?? { }
-    cls.$type.table.name ??= cls.name
+    meta.$type ??= { name:cls.name }
+    meta.$type.table = definition.table ?? { }
+    meta.$type.table.name ??= cls.name
 
-    const props = (cls.$props ?? (cls.$props=[]))
+    const props = (meta.$props ?? (meta.$props=[]))
     Object.keys(definition.columns).forEach(name => {
-        const column = definition.columns[name]
+        const column = (definition.columns as any)[name]
         if (!column) throw new Error(`Column definition for ${name} is missing`)
         if (!column.type) throw new Error(`Column type for ${name} is missing`)
 

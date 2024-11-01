@@ -1,4 +1,4 @@
-import dbSqlite from "./dbSqlite"
+import dbSqlite, { driver, sync, $ } from "./dbSqlite"
 import pgSql from "./dbPostgres"
 
 export function helloSqlite() {
@@ -18,3 +18,4 @@ export function add(a: number, b: number) {
   return a + b
 }
 
+export { driver, sync, $ }

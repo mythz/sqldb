@@ -5,7 +5,7 @@ export function str(q:SqlBuilder) {
     return sql
 }
 
-export const selectContact = 'id,firstName,lastName,email,phone,address,city,state,postCode,createdAt,updatedAt'
+export const selectContact = 'id,firstName,lastName,age,email,phone,address,city,state,postCode,createdAt,updatedAt'
     .split(',').map(c => `"${c}"`).join(', ')
 
 export const selectPerson = 'id,firstName,lastName,email'

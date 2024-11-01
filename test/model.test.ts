@@ -36,8 +36,8 @@ describe ('SQLite Create Table Tests', () => {
     it ('does generate INSERT Contact', () => {
         const sql = Schema.insert(Contact, db.driver)
         expect(sql).toContain('INSERT INTO "Contact" ' + 
-            '("firstName", "lastName", "email", "phone", "address", "city", "state", "postCode", "createdAt", "updatedAt")' + 
-            ' VALUES ($firstName, $lastName, $email, $phone, $address, $city, $state, $postCode, $createdAt, $updatedAt)')
+            '("firstName", "lastName", "age", "email", "phone", "address", "city", "state", "postCode", "createdAt", "updatedAt")' + 
+            ' VALUES ($firstName, $lastName, $age, $email, $phone, $address, $city, $state, $postCode, $createdAt, $updatedAt)')
     })
 
     it ('does generate INSERT Contact onlyFields', () => {
@@ -48,8 +48,8 @@ describe ('SQLite Create Table Tests', () => {
 
     it ('does generate UPDATE Contact', () => {
         const sql = Schema.update(Contact, db.driver)
-        expect(sql).toContain('UPDATE "Contact" SET "firstName"=$firstName, "lastName"=$lastName, "email"=$email, ' + 
-            '"phone"=$phone, "address"=$address, "city"=$city, "state"=$state, "postCode"=$postCode, ' + 
+        expect(sql).toContain('UPDATE "Contact" SET "firstName"=$firstName, "lastName"=$lastName, "age"=$age, ' + 
+            '"email"=$email, "phone"=$phone, "address"=$address, "city"=$city, "state"=$state, "postCode"=$postCode, ' + 
             '"createdAt"=$createdAt, "updatedAt"=$updatedAt WHERE "id" = $id')
     })
 

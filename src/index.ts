@@ -1,5 +1,10 @@
 import dbSqlite, { driver, sync, $ } from "./dbSqlite"
+import { Connection, ConnectionBase, SyncConnection } from "./connection"
 import pgSql from "./dbPostgres"
+import { WhereQuery } from "./builders/where"
+import { SelectQuery } from "./builders/select"
+import { DeleteQuery } from "./builders/delete"
+import { createSql } from "./query"
 
 export function helloSqlite() {
     const result = dbSqlite.sync.scalar`select "hello world" as text`
@@ -18,4 +23,15 @@ export function add(a: number, b: number) {
   return a + b
 }
 
-export { driver, sync, $ }
+export { 
+  driver, 
+  sync, 
+  $,
+  createSql,
+  ConnectionBase,
+  SyncConnection,
+  Connection,
+  WhereQuery,
+  SelectQuery,
+  DeleteQuery,
+}
